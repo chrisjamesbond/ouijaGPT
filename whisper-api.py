@@ -31,10 +31,10 @@ def audio_callback(indata, frames, time, status):
 
     # Calculate the volume of the current audio chunk
     volume_norm = np.linalg.norm(indata) * 10
-    
+
     if volume_norm > silence_threshold:
         if not recording:
-            print("Starting capture...")
+            #print("Starting capture...")
             recording = True
         silence_counter = 0
         audio_buffer.append(indata.copy())
@@ -42,7 +42,7 @@ def audio_callback(indata, frames, time, status):
         if recording:
             silence_counter += chunk_duration
             if silence_counter >= silence_duration:
-                print("Phrase detected. Saving to file and sending to API...")
+                #print("Phrase detected. Saving to file and sending to API...")
                 audio_queue.put(np.concatenate(audio_buffer))
                 audio_buffer = []
                 recording = False
@@ -50,7 +50,7 @@ def audio_callback(indata, frames, time, status):
 
 # Function to transcribe audio using the Whisper API
 def transcribe_audio():
-    print("Starting transcription...")
+    #print("Starting transcription...")
     
     while True:
         audio_data = audio_queue.get()
@@ -65,13 +65,13 @@ def transcribe_audio():
             wav_file.setframerate(sample_rate)
             wav_file.writeframes(audio_data.tobytes())
 
-        print(f"Saved audio to {output_file}")
+        #print(f"Saved audio to {output_file}")
         
         # Reopen the saved file for reading to send to the API
         with open(output_file, "rb") as wav_buffer:
             # Send the WAV file to the Whisper API
             transcript = client.audio.transcriptions.create(model="whisper-1", file=wav_buffer)
-            print("Transcription:", transcript.text)
+            print(transcript.text)
 
         # Optionally, clean up the file after processing
         os.remove(output_file)
