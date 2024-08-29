@@ -13,14 +13,14 @@ client = OpenAI()
 # Parameters
 sample_rate = 16000  # Whisper API uses 16 kHz audio
 chunk_duration = 0.5  # Analyze audio in 0.5-second chunks
-initial_threshold = 10  # Initial silence threshold
+silence_threshold = 10  # Initial silence threshold
 silence_duration = 1  # Number of seconds to consider as the end of a phrase
-margin = 5  # Margin above baseline noise level to set as threshold
 output_file = "output_phrase.wav"  # Local file to save the captured audio
+margin = 5  # Margin above baseline noise level to set as threshold
 
 # Adaptive threshold parameters
 baseline_noise = 0
-adaptive_threshold = initial_threshold
+adaptive_threshold = silence_threshold
 
 # Queue to hold audio chunks
 audio_queue = queue.Queue()
@@ -56,8 +56,8 @@ def audio_callback(indata, frames, time, status):
                 recording = False
                 silence_counter = 0
 
-# Function to transcribe audio using the Whisper API
-def transcribe_audio():
+# Function to transcribe audio and get ChatGPT response
+def transcribe_and_respond():
     while True:
         audio_data = audio_queue.get()
 
@@ -74,15 +74,27 @@ def transcribe_audio():
         # Reopen the saved file for reading to send to the API
         with open(output_file, "rb") as wav_buffer:
             transcript = client.audio.transcriptions.create(model="whisper-1", file=wav_buffer)
-            print(transcript.text)
+            print("You said:", transcript.text)
+
+            # Get a response from ChatGPT
+            response = client.chat.completions.create(
+                model="gpt-3.5-turbo",  # You can use 'gpt-3.5-turbo' for a cheaper option
+                messages=[
+                    {"role": "system", "content": "You are a helpful assistant."},
+                    {"role": "user", "content": transcript.text},
+                ]
+            )
+
+            # Print the response
+            print("ChatGPT says:", response.choices[0].message.content)
 
         # Clean up the file after processing
         os.remove(output_file)
 
-# Start the transcription thread
-transcription_thread = threading.Thread(target=transcribe_audio)
-transcription_thread.daemon = True
-transcription_thread.start()
+# Start the transcription and response thread
+response_thread = threading.Thread(target=transcribe_and_respond)
+response_thread.daemon = True
+response_thread.start()
 
 # Start recording and analyzing audio in chunks
 with sd.InputStream(callback=audio_callback, channels=1, samplerate=sample_rate, dtype='float32', blocksize=int(sample_rate * chunk_duration)):
