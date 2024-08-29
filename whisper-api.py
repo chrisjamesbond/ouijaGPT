@@ -74,19 +74,26 @@ def transcribe_and_respond():
         # Reopen the saved file for reading to send to the API
         with open(output_file, "rb") as wav_buffer:
             transcript = client.audio.transcriptions.create(model="whisper-1", file=wav_buffer)
-            print("You said:", transcript.text)
+            print("You:", transcript.text)
 
             # Get a response from ChatGPT
             response = client.chat.completions.create(
-                model="gpt-3.5-turbo",  # You can use 'gpt-3.5-turbo' for a cheaper option
+                model="gpt-4",  # You can use 'gpt-3.5-turbo' for a cheaper option
                 messages=[
-                    {"role": "system", "content": "You are a helpful assistant."},
+                    {"role": "system", "content": (
+                        "You are a ghost communicating to a person during a séance. Your responses should be short direct. "
+                        "Often, they should evoke vivid, haunting imagery. Use as few words as possible to convey your meaning, one or two, THREE MAXIMUM. "
+                        "Try as often as possible to answer 'YES' or 'NO' when given the opportunity."
+                        "For example, if asked where you are from, you might say, 'BEYOND THE VEIL' "
+                        "If asked about a favorite color, a response could be, 'TWILIGHT MIST' "
+                        "RESPOND IN ALL CAPITAL LETTERS WITH NO PUNCTUATION"
+                    )},
                     {"role": "user", "content": transcript.text},
                 ]
             )
 
             # Print the response
-            print("ChatGPT says:", response.choices[0].message.content)
+            print("Ghost:", response.choices[0].message.content)
 
         # Clean up the file after processing
         os.remove(output_file)
