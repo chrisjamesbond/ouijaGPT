@@ -13,9 +13,14 @@ client = OpenAI()
 # Parameters
 sample_rate = 16000  # Whisper API uses 16 kHz audio
 chunk_duration = 0.5  # Analyze audio in 0.5-second chunks
-silence_threshold = 10  # Adjust this value based on your environment
+initial_threshold = 10  # Initial silence threshold
 silence_duration = 1  # Number of seconds to consider as the end of a phrase
+margin = 5  # Margin above baseline noise level to set as threshold
 output_file = "output_phrase.wav"  # Local file to save the captured audio
+
+# Adaptive threshold parameters
+baseline_noise = 0
+adaptive_threshold = initial_threshold
 
 # Queue to hold audio chunks
 audio_queue = queue.Queue()
@@ -25,16 +30,20 @@ audio_buffer = []
 
 # Function to capture audio in real-time and detect phrases
 def audio_callback(indata, frames, time, status):
-    global silence_counter, recording, audio_buffer
+    global silence_counter, recording, audio_buffer, baseline_noise, adaptive_threshold
     if status:
         print(status, flush=True)
 
     # Calculate the volume of the current audio chunk
     volume_norm = np.linalg.norm(indata) * 10
 
-    if volume_norm > silence_threshold:
+    # Update baseline noise when not recording
+    if not recording:
+        baseline_noise = (baseline_noise * 0.9) + (volume_norm * 0.1)  # Moving average
+        adaptive_threshold = baseline_noise + margin
+
+    if volume_norm > adaptive_threshold:
         if not recording:
-            #print("Starting capture...")
             recording = True
         silence_counter = 0
         audio_buffer.append(indata.copy())
@@ -42,7 +51,6 @@ def audio_callback(indata, frames, time, status):
         if recording:
             silence_counter += chunk_duration
             if silence_counter >= silence_duration:
-                #print("Phrase detected. Saving to file and sending to API...")
                 audio_queue.put(np.concatenate(audio_buffer))
                 audio_buffer = []
                 recording = False
@@ -50,8 +58,6 @@ def audio_callback(indata, frames, time, status):
 
 # Function to transcribe audio using the Whisper API
 def transcribe_audio():
-    #print("Starting transcription...")
-    
     while True:
         audio_data = audio_queue.get()
 
@@ -64,16 +70,13 @@ def transcribe_audio():
             wav_file.setsampwidth(2)  # 16-bit audio
             wav_file.setframerate(sample_rate)
             wav_file.writeframes(audio_data.tobytes())
-
-        #print(f"Saved audio to {output_file}")
         
         # Reopen the saved file for reading to send to the API
         with open(output_file, "rb") as wav_buffer:
-            # Send the WAV file to the Whisper API
             transcript = client.audio.transcriptions.create(model="whisper-1", file=wav_buffer)
             print(transcript.text)
 
-        # Optionally, clean up the file after processing
+        # Clean up the file after processing
         os.remove(output_file)
 
 # Start the transcription thread
